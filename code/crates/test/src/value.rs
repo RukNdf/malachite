@@ -18,9 +18,9 @@ impl ValueId {
     }
 }
 
-impl From<u64> for ValueId {
-    fn from(value: u64) -> Self {
-        Self::new(value)
+impl From<Bytes> for ValueId {
+    fn from(value: Bytes) -> Self {
+        Self::new(u64::from_be_bytes(value.as_ref()[..8].try_into().unwrap()))
     }
 }
 
@@ -61,24 +61,30 @@ impl Protobuf for ValueId {
 /// The value to decide on
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Value {
-    pub value: u64,
+    pub value_size: u64,
+    pub value: Bytes,
     pub extensions: Bytes,
 }
 
 impl Value {
-    pub fn new(value: u64) -> Self {
+    pub fn new(value: Bytes) -> Self {
         Self {
+            value_size: value.len() as u64,
             value,
             extensions: Bytes::new(),
         }
     }
 
+    pub fn size_value(&self) -> u64 {
+        self.value_size
+    }
+
     pub fn id(&self) -> ValueId {
-        ValueId(self.value)
+        ValueId(u64::from_be_bytes(self.value.as_ref()[..8].try_into().unwrap()))
     }
 
     pub fn size_bytes(&self) -> usize {
-        std::mem::size_of_val(&self.value) + self.extensions.len()
+        std::mem::size_of_val(&self.value_size) + std::mem::size_of_val(&self.value) + self.extensions.len()
     }
 }
 
@@ -99,17 +105,15 @@ impl Protobuf for Value {
             .value
             .ok_or_else(|| ProtoError::missing_field::<Self::Proto>("value"))?;
 
-        let value = bytes[0..8].try_into().map_err(|_| {
-            ProtoError::Other(format!(
-                "Too few bytes, expected at least {}",
-                u64::BITS / 8
-            ))
-        })?;
+        let value: Bytes = Bytes::copy_from_slice(&bytes[0..8]);
 
         let extensions = bytes.slice(8..);
 
+        let value_size = value.len() as u64;
+
         Ok(Value {
-            value: u64::from_be_bytes(value),
+            value_size,
+            value,
             extensions,
         })
     }
@@ -117,7 +121,7 @@ impl Protobuf for Value {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn to_proto(&self) -> Result<Self::Proto, ProtoError> {
         let mut bytes = BytesMut::new();
-        bytes.extend_from_slice(&self.value.to_be_bytes());
+        bytes.extend_from_slice(&self.value);
         bytes.extend_from_slice(&self.extensions);
 
         Ok(proto::Value {
