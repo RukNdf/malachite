@@ -1,7 +1,7 @@
-use std::time::Duration;
+//use std::time::Duration;
 
 use eyre::eyre;
-use tokio::time::sleep;
+//use tokio::time::sleep;
 use tracing::{error, info};
 
 use malachitebft_app_channel::app::streaming::StreamContent;
@@ -30,7 +30,7 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
 
                 info!(%start_height, "Consensus is ready");
 
-                sleep(Duration::from_millis(200)).await;
+                //sleep(Duration::from_millis(200)).await;
 
                 if reply
                     .send((start_height, state.get_validator_set().clone()))
@@ -160,8 +160,21 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
 
                 let proposed_value = state.received_proposal_part(from, part).await?;
 
+                let mut vals = "[".to_string();
+                if proposed_value != None{
+                    for b in proposed_value.clone().unwrap().value.value.chunks(8) {
+                        let p: [u8; 8] = b.try_into().unwrap();
+                        vals = vals + &u64::from_le_bytes(p).to_string() + &", ".to_string();
+                    }
+                }
+                vals = vals + "]";
+
                 if reply.send(proposed_value).is_err() {
                     error!("Failed to send ReceivedProposalPart reply");
+                }else {
+                    if vals.chars().nth(1) != Some(']') {
+                        info!(Prop = %vals, "Assembled proposal ");
+                    }
                 }
             }
 
@@ -222,7 +235,7 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
                         }
                     }
                 }
-                sleep(Duration::from_millis(500)).await;
+                //sleep(Duration::from_millis(500)).await;
             }
 
             // It may happen that our node is lagging behind its peers. In that case,

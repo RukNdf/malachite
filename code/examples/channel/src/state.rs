@@ -2,14 +2,14 @@
 //! A regular application would have mempool implemented, a proper database and input methods like RPC.
 
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
+//use std::time::Duration;
 
 use bytes::{Bytes, BytesMut};
 use eyre::eyre;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use sha3::Digest;
-use tokio::time::sleep;
+//use tokio::time::sleep;
 use tracing::{debug, error, info};
 
 use malachitebft_app_channel::app::consensus::ProposedValue;
@@ -260,7 +260,7 @@ impl State {
         let value = self.make_value(height, round);
 
         // Simulate some processing time
-        sleep(Duration::from_millis(500)).await;
+        //sleep(Duration::from_millis(500)).await;
 
         let proposal = ProposedValue {
             height,
@@ -284,7 +284,16 @@ impl State {
     /// typically reaping transactions from a mempool and executing them against its state,
     /// before computing the merkle root of the new app state.
     fn make_value(&mut self, height: Height, _round: Round) -> Value {
-        let value = self.rng.gen_range(100..=100000);
+        let num = self.rng.gen_range(1..=100);
+        let value_size = 8*num;
+
+        let mut b = BytesMut::with_capacity(value_size as usize);
+        for _ in 0..num{
+            let n: u64 = self.rng.gen_range(100..=100000);
+            b.extend_from_slice(&(n.to_be_bytes()));
+
+        }
+        let value : Bytes = b.freeze();
 
         // TODO: Where should we verify signatures?
         let extensions = self
@@ -300,7 +309,7 @@ impl State {
             })
             .freeze();
 
-        Value { value, extensions }
+        Value { value_size, value, extensions }
     }
 
     /// Creates a new proposal value for the given height
@@ -381,14 +390,17 @@ impl State {
         }
 
         // Data
-        // Include each prime factor of the value as a separate proposal part
+        // Include each byte as a separate proposal part
         {
-            for factor in factor_value(value.value) {
-                parts.push(ProposalPart::Data(ProposalData::new(factor)));
+            for b in value.value.value.chunks(8) {
+                let p: [u8; 8] = b.try_into().unwrap();
 
-                hasher.update(factor.to_be_bytes().as_slice());
+                parts.push(ProposalPart::Data(ProposalData::new(u64::from_be_bytes(p))));
+
+                hasher.update(p.as_slice());
             }
         }
+
 
         // Fin
         // Sign the hash of the proposal parts
@@ -455,22 +467,23 @@ impl State {
 
 /// Re-assemble a [`ProposedValue`] from its [`ProposalParts`].
 ///
-/// This is done by multiplying all the factors in the parts.
+/// This is done by appending all u64 values into a single bytes object
 fn assemble_value_from_parts(parts: ProposalParts) -> eyre::Result<ProposedValue<TestContext>> {
     let init = parts.init().ok_or_else(|| eyre!("Missing Init part"))?;
 
-    let value = parts
+    let mut v = BytesMut::with_capacity(8*parts.parts.len());
+    parts
         .parts
         .iter()
         .filter_map(|part| part.as_data())
-        .fold(1, |acc, data| acc * data.factor);
+        .for_each(|part| {v.extend_from_slice(&(part.factor.to_be_bytes()));});
 
     Ok(ProposedValue {
         height: parts.height,
         round: parts.round,
         valid_round: init.pol_round,
         proposer: parts.proposer,
-        value: Value::new(value),
+        value: Value::new(Bytes::copy_from_slice(&v)),
         validity: Validity::Valid,
     })
 }
@@ -480,6 +493,7 @@ pub fn decode_value(bytes: Bytes) -> Value {
     ProtobufCodec.decode(bytes).unwrap()
 }
 
+/*
 /// Returns the list of prime factors of the given value
 ///
 /// In a real application, this would typically split transactions
@@ -505,3 +519,4 @@ fn factor_value(value: Value) -> Vec<u64> {
 
     factors
 }
+*/
