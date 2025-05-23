@@ -2,7 +2,6 @@ use bytes::{Bytes, BytesMut};
 use core::fmt;
 use malachitebft_proto::{Error as ProtoError, Protobuf};
 use serde::{Deserialize, Serialize};
-
 use crate::proto;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Serialize, Deserialize)]
@@ -80,7 +79,11 @@ impl Value {
     }
 
     pub fn id(&self) -> ValueId {
-        ValueId(u64::from_be_bytes(self.value.as_ref()[..8].try_into().unwrap()))
+        if (self.value.as_ref().len()) < 8 {
+            ValueId(0)
+        }else {
+            ValueId(u64::from_be_bytes(self.value.as_ref()[..8].try_into().unwrap()))
+        }
     }
 
     pub fn size_bytes(&self) -> usize {
@@ -105,11 +108,13 @@ impl Protobuf for Value {
             .value
             .ok_or_else(|| ProtoError::missing_field::<Self::Proto>("value"))?;
 
-        let value: Bytes = Bytes::copy_from_slice(&bytes[0..8]);
+        let value_size = u64::from_be_bytes((&bytes[0..8]).try_into().unwrap());
 
-        let extensions = bytes.slice(8..);
+        let cutoff = (value_size+8) as usize;
 
-        let value_size = value.len() as u64;
+        let value: Bytes = Bytes::copy_from_slice(&bytes[8..cutoff]);
+
+        let extensions = bytes.slice(cutoff..);
 
         Ok(Value {
             value_size,
@@ -121,6 +126,7 @@ impl Protobuf for Value {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn to_proto(&self) -> Result<Self::Proto, ProtoError> {
         let mut bytes = BytesMut::new();
+        bytes.extend_from_slice(&self.value_size.to_be_bytes());
         bytes.extend_from_slice(&self.value);
         bytes.extend_from_slice(&self.extensions);
 
