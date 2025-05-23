@@ -288,7 +288,7 @@ impl State {
     /// typically reaping transactions from a mempool and executing them against its state,
     /// before computing the merkle root of the new app state.
     fn make_value(&mut self, height: Height, _round: Round) -> Value {
-        let num = self.rng.gen_range(1..=100);
+        let num = 1;//self.rng.gen_range(1..=100);
         let value_size = 8*num;
 
         let mut b = BytesMut::with_capacity(value_size as usize);
@@ -396,11 +396,11 @@ impl State {
         // Include each byte as a separate proposal part
         {
             for b in value.value.value.chunks(8) {
-                let p: [u8; 8] = b.try_into().unwrap();
+                let p: Bytes = Bytes::copy_from_slice(b);
 
-                parts.push(ProposalPart::Data(ProposalData::new(u64::from_be_bytes(p))));
+                parts.push(ProposalPart::Data(ProposalData::new(p.clone())));
 
-                hasher.update(p.as_slice());
+                hasher.update(p);
             }
         }
 
@@ -461,7 +461,7 @@ impl State {
             // The correctness of the hash computation relies on the parts being ordered by sequence
             // number, which is guaranteed by the `PartStreamsMap`.
             for part in parts.parts.iter().filter_map(|part| part.as_data()) {
-                hasher.update(part.factor.to_be_bytes());
+                hasher.update(part.bytes.clone());
             }
 
             hasher.finalize()
@@ -496,7 +496,7 @@ fn assemble_value_from_parts(parts: ProposalParts) -> eyre::Result<ProposedValue
         .parts
         .iter()
         .filter_map(|part| part.as_data())
-        .for_each(|part| {v.extend_from_slice(&(part.factor.to_be_bytes()));});
+        .for_each(|part| {v.extend_from_slice(&(part.bytes));});
 
     Ok(ProposedValue {
         height: parts.height,
