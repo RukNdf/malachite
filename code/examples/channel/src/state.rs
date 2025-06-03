@@ -284,14 +284,14 @@ impl State {
     /// typically reaping transactions from a mempool and executing them against its state,
     /// before computing the merkle root of the new app state.
     fn make_value(&mut self, height: Height, _round: Round) -> Value {
-        let num = 1;//self.rng.gen_range(1..=100);
+        let num = 16384;//self.rng.gen_range(1..=100);
         let value_size = 8*num;
 
         let mut b = BytesMut::with_capacity(value_size as usize);
+        let mut n: u64 = self.rng.gen_range(100..=100000);
         for _ in 0..num{
-            let n: u64 = self.rng.gen_range(100..=100000);
             b.extend_from_slice(&(n.to_be_bytes()));
-
+            n+=1;
         }
         let value : Bytes = b.freeze();
 
@@ -392,7 +392,8 @@ impl State {
         // Data
         // Include each byte as a separate proposal part
         {
-            for b in value.value.value.chunks(8) {
+            //1024 bytes, same as CometBFT
+            for b in value.value.value.chunks(1024*8) {
                 let p: Bytes = Bytes::copy_from_slice(b);
 
                 parts.push(ProposalPart::Data(ProposalData::new(p.clone())));
