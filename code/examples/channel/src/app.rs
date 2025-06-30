@@ -173,7 +173,8 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
                     error!("Failed to send ReceivedProposalPart reply");
                 }else {
                     if vals.chars().nth(1) != Some(']') {
-                        info!(Prop = %vals, "ABABABA Assembled proposal ");
+                        //info!(Prop = %vals, "ABABABA Assembled proposal ");
+                        info!("ABABABA Assembled proposal ");
                     }
                 }
             }
