@@ -47,7 +47,6 @@ pub struct State {
     pub current_height: Height,
     pub current_round: Round,
     pub current_proposer: Option<Address>,
-    pub peers: HashSet<PeerId>,
 }
 
 /// Represents errors that can occur during the verification of a proposal's signature.
